@@ -110,7 +110,11 @@ app.post('/ai/chat', async (req, res) => {
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array required' });
   }
+  if (!ANTHROPIC_KEY) {
+    return res.status(500).json({ error: 'ANTHROPIC_KEY not set' });
+  }
   try {
+    console.log('AI chat request, messages:', messages.length);
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -126,10 +130,17 @@ app.post('/ai/chat', async (req, res) => {
       })
     });
     const data = await response.json();
-    if (!response.ok) return res.status(500).json({ error: data.error?.message || 'AI error' });
+    console.log('Anthropic response status:', response.status);
+    if (!response.ok) {
+      console.error('Anthropic error:', JSON.stringify(data));
+      return res.status(500).json({ error: data.error?.message || 'AI error', detail: data });
+    }
     const text = data.content?.map(c => c.text||'').join('') || '';
     res.json({ text });
-  } catch(err) { res.status(500).json({ error: err.message }); }
+  } catch(err) {
+    console.error('AI chat error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => console.log('StockIQ API running on port '+PORT));
