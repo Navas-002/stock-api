@@ -5,7 +5,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const FINNHUB_KEY = process.env.FINNHUB_KEY || '';
 const POLYGON_KEY = process.env.POLYGON_KEY || '';
-const ANTHROPIC_KEY = process.env.ANTHROPIC_KEY || '';
+const GROQ_KEY = process.env.GROQ_KEY || '';
 const FINNHUB = 'https://finnhub.io/api/v1';
 const POLYGON = 'https://api.polygon.io';
 
@@ -47,7 +47,7 @@ app.get('/stock/:ticker', async (req, res) => {
       changePct: +(((quote.c-quote.pc)/quote.pc)*100).toFixed(2),
       high: quote.h, low: quote.l, open: quote.o, prevClose: quote.pc,
       marketCap: profile.marketCapitalization ? `$${(profile.marketCapitalization/1000).toFixed(2)}T` : null,
-      sector: profile.finnhubIndustry||null, exchange: profile.exchange||null, logo: profile.logo||null,
+      sector: profile.finnhubIndustry||null, exchange: profile.exchange||null,
       high52: m['52WeekHigh']||null, low52: m['52WeekLow']||null,
       beta: m.beta||null, pe: m.peBasicExclExtraTTM||null,
       eps: m.epsBasicExclExtraAnnual||null,
@@ -104,38 +104,36 @@ app.get('/market/movers', async (req, res) => {
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── AI CHAT ENDPOINT ─────────────────────────────────────
+// ── AI CHAT via Groq (free, ultra fast) ──────────────────
 app.post('/ai/chat', async (req, res) => {
   const { messages, system } = req.body;
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array required' });
   }
-  if (!ANTHROPIC_KEY) {
-    return res.status(500).json({ error: 'ANTHROPIC_KEY not set' });
-  }
+  if (!GROQ_KEY) return res.status(500).json({ error: 'GROQ_KEY not configured' });
   try {
-    console.log('AI chat request, messages:', messages.length);
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const payload = {
+      model: 'llama-3.1-8b-instant',
+      max_tokens: 512,
+      messages: [
+        { role: 'system', content: system || 'You are a friendly financial coach for teenagers learning to invest.' },
+        ...messages
+      ]
+    };
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01'
+        'Authorization': `Bearer ${GROQ_KEY}`
       },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 512,
-        system: system || 'You are a friendly financial coach for teenagers learning to invest.',
-        messages
-      })
+      body: JSON.stringify(payload)
     });
     const data = await response.json();
-    console.log('Anthropic response status:', response.status);
     if (!response.ok) {
-      console.error('Anthropic error:', JSON.stringify(data));
-      return res.status(500).json({ error: data.error?.message || 'AI error', detail: data });
+      console.error('Groq error:', JSON.stringify(data));
+      return res.status(500).json({ error: data.error?.message || 'AI error' });
     }
-    const text = data.content?.map(c => c.text||'').join('') || '';
+    const text = data.choices?.[0]?.message?.content || '';
     res.json({ text });
   } catch(err) {
     console.error('AI chat error:', err.message);
