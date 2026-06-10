@@ -167,7 +167,8 @@ app.get('/stock/:ticker/news', async (req, res) => {
       headline: String(a.headline||'').slice(0,300),
       source: String(a.source||'').slice(0,100),
       url: String(a.url||'').startsWith('http') ? a.url : '#',
-      datetime: new Date(a.datetime*1000).toLocaleDateString()
+      published: typeof a.datetime === 'number' ? a.datetime : null, // raw unix SECONDS -> front-end shows "Xh ago"
+      datetime: new Date(a.datetime*1000).toLocaleDateString()       // kept for backward-compat
     }))});
   } catch(err) { res.status(500).json({ error: 'Failed to fetch news' }); }
 });
